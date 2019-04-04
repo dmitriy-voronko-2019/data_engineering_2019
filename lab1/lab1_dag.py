@@ -16,22 +16,63 @@ from airflow.operators.python_operator import PythonOperator
 где
 yyyymmdd - это временная метка для файлов с данными, полученными за указанный день (тогда, когда был запущен скрипт).
 
-а также сами данные загружаются в таблицу lab1db.lab1_messages в ClickHouse с использованием поставляемого Python-драйвера для работы с данной СУБД.
+а также сами данные загружаются в таблицу default.dmitriy_voronko в ClickHouse с использованием поставляемого Python-драйвера для работы с данной СУБД.
 
 
-запуск самого Apache Airflow 1.9.0 в качестве демона выполняется следующим образом:
+-- создание пользователя для чекера для проверки ЛБ.
+
+import airflow
+from airflow import models, settings
+from airflow.contrib.auth.backends.password_auth import PasswordUser
+user = PasswordUser(models.User())
+user.username = 'newprolab'
+user.password = 'Newprolab19!'
+session = settings.Session()
+session.add(user)
+session.commit()
+session.close()
+exit()
+
+-- сделать также админа нельзя, потому что такой функционал не поддерживается apache airflow 1.10.2
+
+
+запуск самого Apache Airflow 1.10.2 в качестве демона выполняется следующим образом:
+
+1. заходим в директорию и активируем python окружение.
+cd /home/airflow/workspace
+export AIRFLOW_HOME=/home/airflow/workspace/airflow_home
+source venv/bin/activate
+2. запускаем сами процессы:
+airflow webserver --port 8081 --daemon
+airflow scheduler --daemon
+
+-- чтобы остановить процессы:
+
+sudo kill $(ps -ef | grep "airflow webserver" | awk '{print $2}')
+sudo kill $(ps -ef | grep "airflow scheduler" | awk '{print $2}')
+
+
+
+sudo mkdir /home/airflow
+sudo mkdir /home/airflow/workspace
+sudo chmod 777 -R /home/airflow
+cd /home/airflow/workspace
+export AIRFLOW_HOME=/home/airflow/workspace/airflow_home
+virtualenv -p /usr/bin/python3 venv
+
+
 
 cd /home/airflow/workspace
 export AIRFLOW_HOME=/home/airflow/workspace/airflow_home
 source venv/bin/activate
 
+pip install flask-bcrypt
+virtualenv -p which python3 venv
+
 airflow webserver --daemon
 airflow scheduler --daemon
 
-остановить процессы:
-
-sudo kill $(ps -ef | grep "airflow webserver" | awk '{print $2}')
-sudo kill $(ps -ef | grep "airflow scheduler" | awk '{print $2}')
+# https://airflow.apache.org/security.html#web-authentication
 
 подключение к ClickHouse
 
@@ -40,8 +81,13 @@ clickhouse-client --port 9011
 use lab1db;
 select count(1) from lab1_messages;
 
+-- нужно открыть доступ в /etc/clickhouse-server/config.xml указав <listen_host>0.0.0.0</listen_host> и перезапустить сам сервер sudo service clickhouse-server restart
 
-git clone https://github.com/dmitriy-voronko-2019/data_engineering_2019.git D:\lab1
+
+мой репозиторий на Github
+
+https://github.com/dmitriy-voronko-2019/data_engineering_2019.git
+
 
 '''
 
@@ -53,9 +99,9 @@ def my_dag_function():
   # порт HDFS
   hdfs_port = 50070
 
-  # открываем соединение к ElasticSearch и получаем данные из индекса
+  # открываем соединение к ElasticSearch и получаем данные из индекса (забираем всё то, что нападало за последние 2 минуты).
   es = elasticsearch.Elasticsearch([hostname+":"+str(elk_port)])
-  res = es.search(index="dmitriy.voronko", body = {"query" : {"range" : {"@timestamp": {"gte" : "now-15m", "lt" : "now"}}}}, size = 500)
+  res = es.search(index="dmitriy.voronko", body = {"query" : {"range" : {"@timestamp": {"gte" : "now-2m", "lt" : "now"}}}}, size = 500)
 
   # получаем название директории текущего дня обработки данных.
   curr_dir_name = (datetime.now()).strftime("%Y%m%d")
@@ -110,12 +156,13 @@ def my_dag_function():
       else:
         firstInSession_v = 0
       userAgentName_v = data['userAgentName']
-      client.execute('INSERT INTO lab1db.lab1_messages (timestamp_, referer_, location_, remoteHost_, partyId_, sessionId_, pageViewId_, eventType_, item_id_, item_price_, item_url_, basket_price_, detectedDuplicate_, detectedCorruption_,  firstInSession_, userAgentName_) VALUES', [(timestamp_v, referer_v, location_v, remoteHost_v, partyId_v, sessionId_v, pageViewId_v, eventType_v, item_id_v, item_price_v, item_url_v,  basket_price_v, detectedDuplicate_v, detectedCorruption_v, firstInSession_v, userAgentName_v)])
+      client.execute('INSERT INTO lab1db.lab1_messages (timestamp, referer, location, remoteHost, partyId, sessionId, pageViewId, eventType, item_id, item_price, item_url, basket_price, detectedDuplicate, detectedCorruption,  firstInSession, userAgentName) VALUES', [(timestamp_v, referer_v, location_v, remoteHost_v, partyId_v, sessionId_v, pageViewId_v, eventType_v, item_id_v, item_price_v, item_url_v,  basket_price_v, detectedDuplicate_v, detectedCorruption_v, firstInSession_v, userAgentName_v)])
+  
   return True
 
-# запускаемый DAG работает каждые 15 минут.
+# запускаемый DAG работает каждые 2 минутs.
 dag = DAG('lab1_dag', description='Simple tutorial DAG',
-          schedule_interval='*/15 * * * *',
+          schedule_interval='*/2 * * * *',
           start_date=datetime(2019, 3, 20), catchup=False)
 
 dummy_operator = DummyOperator(task_id='dummy_task', retries=3, dag=dag)

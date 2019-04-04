@@ -1,0 +1,42 @@
+1. на каждой ноде запускаем ElasticSearch:
+
+sudo -i service elasticsearch start
+
+и делаем проверку:
+
+sudo curl -XGET 'localhost:9200/?pretty'
+
+2. стартуем на ноде со статическим IP Kibana:
+
+sudo -i service kibana start
+
+3. стартуем на ноде со статическим IP Logstash:
+
+sudo -i service logstash start
+
+4. запускаем на ноде со статическим IP ClickHouse:
+
+sudo service clickhouse-server start
+(проверяю подключение к clickhouse):
+
+clickhouse-client --port 9011
+
+5. запускаем на ноде со статическим IP Airflow (у меня стоит 1.10.2):
+
+запуск самого Apache Airflow 1.10.2 в качестве демона выполняется следующим образом:
+
+cd /home/airflow/workspace
+export AIRFLOW_HOME=/home/airflow/workspace/airflow_home
+source venv/bin/activate
+
+airflow initdb
+airflow resetdb
+
+airflow webserver --port 8081 --daemon (веб-сервер порт 8081 уже прописан)
+airflow scheduler --daemon (шедулер)
+
+проверяем, что Airflow запустился корректно (заходим в браузере на http://34.76.18.152:8081)
+
+
+http://lk-de.cluster-lab.com/lab/dlaba01
+
